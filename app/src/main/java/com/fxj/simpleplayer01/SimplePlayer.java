@@ -16,8 +16,8 @@ import java.nio.ByteBuffer;
 
 public class SimplePlayer {
 
-    private static final String TAG = "Player";
-    private static final boolean VERBOSE = false;
+    private static final String TAG =SimplePlayer.class.getSimpleName();
+    private static final boolean VERBOSE = true;
     private static final long TIMEOUT_US = 10000;
 
     private IPlayStateListener mListener;
@@ -118,7 +118,7 @@ public class SimplePlayer {
         int inputBufferIndex = decoder.dequeueInputBuffer(TIMEOUT_US);
         if (inputBufferIndex >= 0) {
             ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];
-            int sampleSize = extractor.readSampleData(inputBuffer, 0);
+            int sampleSize = extractor.readSampleData(inputBuffer, 0);/*把指定通道中的数据按偏移量读取到ByteBuffer中*/
             if (sampleSize < 0) {
                 decoder.queueInputBuffer(inputBufferIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
                 isMediaEOS = true;
@@ -127,7 +127,7 @@ public class SimplePlayer {
                 }
             } else {
                 decoder.queueInputBuffer(inputBufferIndex, 0, sampleSize, extractor.getSampleTime(), 0);
-                extractor.advance();
+                extractor.advance();/*读取下一帧数据*/
             }
         }
         return isMediaEOS;
@@ -157,6 +157,7 @@ public class SimplePlayer {
      */
     private static int getTrackIndex(MediaExtractor extractor, String mediaType) {
         int trackIndex = -1;
+        Log.d(TAG,"**getTrackIndex**track Count="+extractor.getTrackCount());
         for (int i = 0; i < extractor.getTrackCount(); i++) {
             MediaFormat mediaFormat = extractor.getTrackFormat(i);
             String mime = mediaFormat.getString(MediaFormat.KEY_MIME);
