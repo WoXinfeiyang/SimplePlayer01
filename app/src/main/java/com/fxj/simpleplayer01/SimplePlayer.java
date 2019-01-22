@@ -4,8 +4,11 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.media.MediaCodec;
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
 
@@ -36,6 +39,7 @@ public class SimplePlayer {
         this.filePath = filePath;
         isPlaying = false;
         isPause = false;
+        displayCodecs();
     }
 
     /**
@@ -107,7 +111,7 @@ public class SimplePlayer {
     }
 
     /**
-     * 解复用，得到需要解码的数据
+     * 解复用，得到需要解码的数据,喂数据
      * @param extractor
      * @param decoder
      * @param inputBuffers
@@ -115,12 +119,12 @@ public class SimplePlayer {
      */
     private static boolean decodeMediaData(MediaExtractor extractor, MediaCodec decoder, ByteBuffer[] inputBuffers) {
         boolean isMediaEOS = false;
-        int inputBufferIndex = decoder.dequeueInputBuffer(TIMEOUT_US);
+        int inputBufferIndex = decoder.dequeueInputBuffer(TIMEOUT_US);/*从MediaCodec中得到一个可以使用的InputBuffer的索引*/
         if (inputBufferIndex >= 0) {
-            ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];
-            int sampleSize = extractor.readSampleData(inputBuffer, 0);/*把指定通道中的数据按偏移量读取到ByteBuffer中*/
+            ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];/**根据索引得到一个ByteBuffer*/
+            int sampleSize = extractor.readSampleData(inputBuffer, 0);/*把指定通道中的数据按偏移量读取到ByteBuffer中,即将MediaExtractor中的未解码的视频数据写入到ByteBuffer类型的inputBuffer*/
             if (sampleSize < 0) {
-                decoder.queueInputBuffer(inputBufferIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                decoder.queueInputBuffer(inputBufferIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);/*将inputBufferInde中未解码的数据放入到MediaCodec中供MediaCodec处理*/
                 isMediaEOS = true;
                 if (VERBOSE) {
                     Log.d(TAG, "end of stream");
@@ -161,6 +165,7 @@ public class SimplePlayer {
         for (int i = 0; i < extractor.getTrackCount(); i++) {
             MediaFormat mediaFormat = extractor.getTrackFormat(i);
             String mime = mediaFormat.getString(MediaFormat.KEY_MIME);
+            Log.d(TAG,"**getTrackIndex**mime="+mime);
             if (mime.startsWith(mediaType)) {
                 trackIndex = i;
                 break;
@@ -195,9 +200,9 @@ public class SimplePlayer {
                 }
                 videoExtractor.selectTrack(videoTrackIndex);
                 try {
-                    videoCodec = MediaCodec.createDecoderByType(mediaFormat.getString(MediaFormat.KEY_MIME));
+                    videoCodec = createCodecByMediaFormat(mediaFormat)/*MediaCodec.createDecoderByType(mediaFormat.getString(MediaFormat.KEY_MIME))*/;
                     videoCodec.configure(mediaFormat, surface, null, 0);
-                } catch (IOException e) {
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
@@ -226,7 +231,7 @@ public class SimplePlayer {
                     if (!isVideoEOS) {
                         isVideoEOS = decodeMediaData(videoExtractor, videoCodec, inputBuffers);
                     }
-                    // 获取解码后的数据
+                    // 从MediaCodec中过去已经解码好的一帧数据的索引index
                     int outputBufferIndex = videoCodec.dequeueOutputBuffer(videoBufferInfo, TIMEOUT_US);
                     switch (outputBufferIndex) {
                         case MediaCodec.INFO_OUTPUT_FORMAT_CHANGED:
@@ -247,7 +252,7 @@ public class SimplePlayer {
                         default:
                             // 延迟解码
                             decodeDelay(videoBufferInfo, startMs);
-                            // 释放资源
+                            // 传入解码好的一帧数据的索引,MediaCodec将释放outputBuffer到供SufaceView显示
                             videoCodec.releaseOutputBuffer(outputBufferIndex, true);
                             break;
                     }
@@ -264,7 +269,36 @@ public class SimplePlayer {
             videoExtractor.release();
         }
     }
+    /**打印所有的编解码器*/
+    private void displayCodecs() {
+        MediaCodecList list = new MediaCodecList(MediaCodecList.REGULAR_CODECS);//REGULAR_CODECS参考api说明,获取常用的编解码器
+        MediaCodecInfo[] codecs = list.getCodecInfos();
+        for (MediaCodecInfo codec : codecs) {
+            if (codec.isEncoder()){
+                Log.d(TAG,"**displayCodecs**encoder:"+codec.getName());
+            }else{
+                Log.i(TAG, "**displayCodecs**decoder:"+codec.getName());
+            }
 
+        }
+    }
+
+    private MediaCodec createCodecByMediaFormat(MediaFormat format){
+        MediaCodecList list=new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+        String decoderName =list.findDecoderForFormat(format);
+        Log.d(TAG,"**createCodecByMediaFormat**decoderName="+decoderName);
+        MediaCodec decoder=null;
+
+        try {
+            if(!TextUtils.isEmpty(decoderName)){
+                decoder=MediaCodec.createByCodecName(decoderName);
+            }
+
+        }catch (IOException e){
+            Log.e(TAG,"****createCodecByMediaFormat****IOException Message:"+e.getMessage());
+        }
+        return decoder;
+    }
     /**
      * 音频解码线程
      */
