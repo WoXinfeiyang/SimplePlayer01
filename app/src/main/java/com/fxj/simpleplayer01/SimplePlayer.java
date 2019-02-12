@@ -143,6 +143,7 @@ public class SimplePlayer {
      * @param startMillis
      */
     private void decodeDelay(MediaCodec.BufferInfo bufferInfo, long startMillis) {
+        Log.d(TAG,"**decodeDelay**BufferInfo.presentationTimeUs="+bufferInfo.presentationTimeUs);
         while (bufferInfo.presentationTimeUs / 1000 > System.currentTimeMillis() - startMillis) {
             try {
                 Thread.sleep(10);
